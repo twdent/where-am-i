@@ -1,3 +1,10 @@
+.vscode/
+Deep_blind_PnP/
+GMaps_models/
+pixloc/
+ros_anymal/
+warp/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
