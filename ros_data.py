@@ -6,20 +6,22 @@ import numpy as np
 
 class RosData:
 
-    def __init__(self):
+    def __init__(self, prod=False):
         rosbag_folder = './ros_anymal/ETH_Cerberus_localization/'
         sub_folder ='jetson/' 
         bag_name = '2023-03-27-13-48-57_anymal-cerberus-jetson_mission_5.bag'
 
         sub_folder = 'Processed_bag/' 
         bag_name =  'mergedBag.bag'
-
-        # self.bag = rosbag.Bag(rosbag_folder + sub_folder + bag_name)
+        
 
         self.camera_topics = ['/alphasense_driver_ros/cam3/color_rect/image/compressed', 
                               '/alphasense_driver_ros/cam4/color_rect/image/compressed', 
                               '/alphasense_driver_ros/cam5/color_rect/image/compressed', 
-                                ]
+                             ]
+        self.prod = prod
+        if self.prod:                        
+            self.bag = rosbag.Bag(rosbag_folder + sub_folder + bag_name)
         
     # def generate_imgs(self):
 
@@ -51,9 +53,19 @@ class RosData:
 
     def get_candidate_position(self,timestamp):
         return np.array([-7, 2, 0.5], dtype=np.float32)
+    
+    def get_camera_intrinsics(self):
+        if not self.prod:
+            return np.array([377.1323930964233, 0.0, 704.90459865174, 
+                            0.0, 376.76480664462014, 523.3273863186171, 
+                            0.0, 0.0, 1.0]).reshape(3,3)
+        msgs = self.bag.read_messages(topics=['/alphasense_driver_ros/cam4/color_rect/camera_info'])
+        # read the K matrix from first message header
+        for topic, msg, t in msgs:
+            instrinsics = msg.message.K
+            break
+        return instrinsics
          
         
-
-
 if __name__ == "__main__":
-    RosData().generate_imgs()
+    RosData().get_camera_intrinsics()

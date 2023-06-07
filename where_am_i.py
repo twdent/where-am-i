@@ -13,7 +13,7 @@ from SuperGluePretrainedNetwork.superglue_pairs import get_matching_points
 
 import cv2
 def render_RGBBXYZ(render_position, render_lookat, render_up=[0,0,1]):
-    img_width, img_height = 1920, 1080
+    img_width, img_height = 640, 480
     render = rendering.OffscreenRenderer(img_width, img_height)
     model_path = os.path.expanduser("~")+"/Documents/models3D/obj/ETHmodel.obj"
     model = o3d.io.read_triangle_model(model_path)
@@ -83,61 +83,33 @@ def render_RGBBXYZ(render_position, render_lookat, render_up=[0,0,1]):
 
     xyz_camera = np.stack([x3, y3, z3], axis=2)
 
-    # stack the XYZ coordinates and onto the RGB image
-    cimg = np.array(cimg)
-    RBGXYZ_img = np.hstack([cimg, xyz_camera])
-
-    # print("Saving image at test2.png")
-    # # dimg = np.array(dimg)
-    # dimg = np.where(dimg == np.inf, 0, dimg)
-    # dimg = dimg / np.max(dimg) * 255
-    # cv2.imwrite("test2.png", dimg)
-
-    #plot 3d point cloud
-    xyz_camera = xyz_camera.reshape(-1, 3)
-    xyz_camera = xyz_camera[xyz_camera[:, 2] != 0]
-    xyz_camera = xyz_camera[xyz_camera[:, 2] != np.inf]
-
-    
-    plt.figure(1)
-    ax = plt.axes(projection='3d')
-    ax.scatter(xyz_camera[:, 0], xyz_camera[:, 1], xyz_camera[:, 2], c=xyz_camera[:, 2], cmap='viridis')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    #equal axis scaling
-    ax.set_aspect('equal', 'box')
-
-    #convert back to world coordinates
-    xyz_camera = np.hstack([xyz_camera, np.ones((xyz_camera.shape[0], 1))])
-    xyz_world = np.linalg.inv(Rt_cs) @ xyz_camera.T
-    xyz_world = xyz_world.T[:, :3]
-
-    plt.figure(2)
-    ax = plt.axes(projection='3d')
-    ax.scatter(xyz_world[:, 0], xyz_world[:, 1], xyz_world[:, 2], c=xyz_world[:, 2], cmap='viridis')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    #equal axis scaling
-    ax.set_aspect('equal', 'box')
-    
-    # plt.show()
-
+    # convert to world coordinates
+    xyz_world = xyz_camera @ np.linalg.inv(Rt_cs[:3, :3]).T + Rt_cs[:3, 3]
+  
+    RBGXYZ_img = np.dstack([cimg, xyz_world])
     return RBGXYZ_img
 
 
-
+def get_pose(match_3d_pts, match_2d_pts, camera_intrinsics):
+    #use PnP to get pose
+    retval, rvec, tvec, inliers = cv2.solvePnPRansac(match_3d_pts, match_2d_pts, camera_intrinsics, None)
+    print("retval: ", retval)
+    print("rvec: ", rvec)
+    print("tvec: ", tvec)
+    return retval, rvec, tvec, inliers
+    
 
 
 if __name__ == "__main__":
-
+    pts = np.load('img_pairs/ego_img_render_img_matches.npz')
+    
     start = time.time()
     # #get ros imgs and candidate positions
-    ros_data = RosData()
+    ros_data = RosData(prod=False)
     timestamp=1679918012.472778
     egocentric_imgs = ros_data.get_ego_imgs(timestamp)
     candidate_position = ros_data.get_candidate_position(timestamp)
+    camera_intrinsics = ros_data.get_camera_intrinsics()
     #save ego img
     cv2.imwrite('render_imgs/ego_img.png', egocentric_imgs)
 
@@ -147,11 +119,29 @@ if __name__ == "__main__":
     img_and_points = render_RGBBXYZ(render_position, render_lookat)
 
     # #get matching points
-    matching_points = get_matching_points(img_and_points, egocentric_imgs)
+    mkpts0, mkpts1, mconf = get_matching_points(img_and_points, egocentric_imgs)
 
-    # #get pose with PnP
-    # pose = get_pose(matching_points)
+    #get 3d points of mkpts1 from img_and_points
+    all_3d_pts = img_and_points[:, :, 3:]
+    match_3d_pts = np.array([all_3d_pts[int(mkpt[1]), int(mkpt[0])] for mkpt in mkpts1])
+
+    plt.figure(3)
+    ax = plt.axes(projection='3d')
+    ax.scatter(match_3d_pts[:, 0], match_3d_pts[:, 1], match_3d_pts[:, 2], c=np.array(mconf), cmap='viridis')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    #equal axis scaling
+    ax.set_aspect('equal', 'box')
+
+    #get pose with PnP
+    pose = get_pose(match_3d_pts, mkpts0, camera_intrinsics)
+
+    ax.scatter(pose[2][0], pose[2][1], pose[2][2], c='r', marker='o')
 
 
-    end = time.time()
-    print("Time to run main(): ", end-start)
+    #set view
+    # ax.view_init(elev=0, azim=np.pi/2)
+    #save figure
+    plt.savefig('render_imgs/3d_pts.png')
+    
