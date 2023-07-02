@@ -2,11 +2,9 @@
 Deep_blind_PnP/
 GMaps_models/
 pixloc/
-ros_anymal/
 warp/
-
-!*/ros_anymal/ETH_Cerberus_localization/jetson/2023-03-27-13-48-57_anymal-cerberus-jetson_mission_0.bag
-!ros_anymal/ETH_Cerberus_localization/jetson/2023-03-27-13-48-57_anymal-cerberus-jetson_mission_0.bag
+ros_anymal
+generated_results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
